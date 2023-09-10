@@ -99,7 +99,7 @@ class VT5:
         answers = batch['answers']
 
         input_embeds, attention_mask, labels = self.prepare_inputs_for_vqa(question, words, boxes, images, answers)
-        outputs = self.model.language_backbone(inputs_embeds=input_embeds, attention_mask=attention_mask, labels=labels)
+        outputs = self.model.language_backbone.forward(inputs_embeds=input_embeds, attention_mask=attention_mask, labels=labels)
         pred_answers, pred_answers_conf = self.get_answer_from_model_output(input_embeds, attention_mask) if return_pred_answer else None
 
         return outputs, pred_answers, pred_answers_conf

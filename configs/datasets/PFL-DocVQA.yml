@@ -1,4 +1,4 @@
 dataset_name: PFL-DocVQA
-imdb_dir: /SSD2/Datasets/PFL-DocVQA/imdb
-images_dir: /SSD2/Datasets/PFL-DocVQA/images
-provider_docs: /SSD2/Datasets/PFL-DocVQA/imdb/data_points.json
+imdb_dir: /media/chs.hdsi/DATA/PFL-DocVQA/data/clients
+images_dir: /media/chs.hdsi/DATA/PFL-DocVQA/data/images
+provider_docs: /media/chs.hdsi/DATA/PFL-DocVQA/data/clients/data_points.json

@@ -27,3 +27,4 @@ eggs/
 *.so
 *-checkpoint.ipynb
 csc
+wandb

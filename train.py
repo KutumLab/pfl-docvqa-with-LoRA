@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import random
 from collections import OrderedDict
 from communication.log_communication import log_communication
@@ -12,165 +13,94 @@ from torch.utils.data import DataLoader
 from datasets.PFL_DocVQA import collate_fn
 
 from tqdm import tqdm
-from build_utils import (build_dataset, build_model, build_optimizer, build_provider_dataset)
+from build_utils import (build_dataset, build_model, build_optimizer, build_provider_dataset, build_lora_model)
 from differential_privacy.dp_utils import (add_dp_noise, clip_parameters, flatten_params, get_shape, reconstruct_shape)
-from eval import evaluate  # fl_centralized_evaluation
+from eval import evaluate, fl_centralized_evaluation, fl_train
 from logger import Logger
 from metrics import Evaluator
 from checkpoint import save_model
 from utils import load_config, parse_args, seed_everything
-from utils_parallel import get_parameters_from_model, set_parameters_model, weighted_average
+from utils_parallel import get_parameters_from_model, set_parameters_model, weighted_average, get_lora_parameters, set_lora_parameters
 from collections import OrderedDict
-
-
-# def fl_train(data_loaders, model, optimizer, lr_scheduler, evaluator, logger, client_id, fl_config):
-def fl_train(data_loaders, model, optimizer, evaluator, logger, client_id, fl_config):
-    """
-    Trains and returns the updated weights.
-    """
-    model.model.train()
-    param_keys = list(model.model.state_dict().keys())
-    parameters = copy.deepcopy(list(model.model.state_dict().values()))
-
-    keyed_parameters = {n: p.requires_grad for n, p in model.model.named_parameters()}
-    frozen_parameters = [not keyed_parameters[n] if n in keyed_parameters else False for n, p in model.model.state_dict().items()]
-
-    logger.current_epoch += 1
-
-    agg_update = None
-    if not config.use_dp and len(data_loaders) > 1:
-        raise ValueError("Non private training should only use one data loader.")
-
-    total_training_steps = sum([len(data_loader) for data_loader in data_loaders]) * config.fl_params.iterations_per_fl_round
-    total_training_samples = sum([len(data_loader.dataset) for data_loader in data_loaders]) * config.fl_params.iterations_per_fl_round
-    pbar = tqdm(total=total_training_steps)
-
-    total_loss = 0
-    fl_round_acc = 0
-    fl_round_anls = 0
-
-    for provider_dataloader in data_loaders:
-        # Set model weights to state of beginning of federated round
-        state_dict = OrderedDict({k: v for k, v in zip(param_keys, parameters)})
-        model.model.load_state_dict(state_dict, strict=True)
-        model.model.train()
-
-        # Reset the optimizer
-        if config.use_dp:
-            optimizer = build_optimizer(model, config)
-
-        # Perform N provider iterations (each provider has their own dataloader in the non-private case)
-        for iter in range(config.fl_params.iterations_per_fl_round):
-            for batch_idx, batch in enumerate(provider_dataloader):
-
-                gt_answers = batch['answers']
-                outputs, pred_answers, answer_conf = model.forward(batch, return_pred_answer=True)
-                loss = outputs.loss
-
-                # total_loss += loss.item() / len(batch['question_id'])
-                loss.backward()
-                optimizer.step()
-                # lr_scheduler.step()
-                optimizer.zero_grad()
-
-                metric = evaluator.get_metrics(gt_answers, pred_answers)
-
-                total_loss += outputs.loss.item()
-                fl_round_acc += np.sum(metric['accuracy'])
-                fl_round_anls += np.sum(metric['anls'])
-
-                log_dict = {
-                    'Train/Batch loss': outputs.loss.item(),
-                    'Train/Batch Accuracy': np.mean(metric['accuracy']),
-                    'Train/Batch ANLS': np.mean(metric['anls']),
-                    'lr': optimizer.param_groups[0]['lr']
-                }
-
-                logger.logger.log(log_dict)
-                pbar.update()
-
-        # After all the iterations:
-        # Get the update
-        new_update = [w - w_0 for w, w_0 in zip(list(model.model.state_dict().values()), parameters)]  # Get model update
-
-        if config.use_dp:
-            # flatten update
-            shapes = get_shape(new_update)
-            new_update = flatten_params(new_update)
-
-            # clip update:
-            new_update = clip_parameters(new_update, clip_norm=config.dp_params.sensitivity)
-
-            # Aggregate (Avg)
-            if agg_update is None:
-                agg_update = new_update
-            else:
-                agg_update += new_update
-
-    # Handle DP after all updates are done
-    if config.use_dp:
-        # Add the noise
-        agg_update = add_dp_noise(agg_update, noise_multiplier=config.dp_params.noise_multiplier, sensitivity=config.dp_params.sensitivity)
-
-        # Divide the noisy aggregated update by the number of providers (Average update).
-        agg_update = torch.div(agg_update, len(data_loaders))
-
-        # Add the noisy update to the original model
-        agg_update = reconstruct_shape(agg_update, shapes)
-
-        # Restore original weights (without noise) from frozen layers.
-        agg_update = [upd if not is_frozen else 0 for upd, params, is_frozen in zip(agg_update, parameters, frozen_parameters)]
-
-        # all([torch.all(params == new_params).item() == is_frozen for params, new_params, is_frozen in zip(parameters, agg_update, frozen_parameters)])  Restoration Test
-
-    else:
-        agg_update = new_update
-
-    # upd_weights = [torch.add(agg_upd, w_0).cpu() for agg_upd, w_0 in zip(agg_update, copy.deepcopy(parameters))]  # Send all weights
-    upd_weights = [torch.add(agg_upd, w_0).cpu() for agg_upd, w_0, is_frozen in zip(agg_update, copy.deepcopy(parameters), frozen_parameters) if not is_frozen]  # Send weights of NON-Frozen layers.
-
-    pbar.close()
-
-    fl_round_log_dict = {
-        'Train/FL Round loss': total_loss / total_training_samples,
-        'Train/FL Round Accuracy': fl_round_acc / total_training_samples,
-        'Train/FL Round ANLS': fl_round_anls / total_training_samples,
-        'fl_round': logger.current_epoch
-    }
-
-    logger.logger.log(fl_round_log_dict)
-
-    # if fl_config["log_path"] is not None:
-    if config.flower:
-        # log_communication(federated_round=fl_config.current_round, sender=client_id, receiver=-1, data=upd_weights, log_location=logger.comms_log_file)  # Store model's weights bytes.
-        log_communication(federated_round=fl_config.current_round, sender=client_id, receiver=-1, data=upd_weights, log_location=logger.comms_log_file)  # Store only communicated weights (sent parameters).
-
-    # Send the weights to the server
-    return upd_weights
+import torch.multiprocessing as mp 
+import time
+import wandb
+from torch.utils.data import SubsetRandomSampler, random_split
 
 
 class FlowerClient(fl.client.NumPyClient):
     # def __init__(self, model, trainloader, valloader, optimizer, lr_scheduler, evaluator, logger, config, client_id):
-    def __init__(self, model, trainloader, valloader, optimizer, evaluator, logger, config, client_id):
-        self.model = model
-        self.trainloader = trainloader
-        self.valloader = valloader
-        self.optimizer = optimizer
-        # self.lr_scheduler = lr_scheduler
-        self.evaluator = evaluator
-        self.logger = logger
-        self.logger.log_model_parameters(self.model)
+    def __init__(self,  config, client_id):
+        # self.model = model
+        #self.trainloader = trainloader
+        #self.valloader = valloader
+        # self.optimizer = optimizer
+        # # self.lr_scheduler = lr_scheduler
+        self.evaluator = Evaluator(case_sensitive=False)
+        self.logger = Logger(config, client_id)
+        # self.logger.log_model_parameters(self.model)
         self.config = config
         self.client_id = client_id
+        
 
     def fit(self, parameters, config):
-        self.set_parameters(self.model, parameters, config)
-        # updated_weigths = fl_train(self.trainloader, self.model, self.optimizer, self.lr_scheduler, self.evaluator, self.logger, self.client_id, config)
-        updated_weigths = fl_train(self.trainloader, self.model, self.optimizer, self.evaluator, self.logger, self.client_id, config)
-        return updated_weigths, 1, {}  # TODO 1 ==> Number of selected clients.
+        
+        log_communication(federated_round=config.current_round, sender=-1, receiver=self.client_id, data=parameters, log_location=self.logger.comms_log_file)
+        
+
+        if config.use_dp:
+            # Pick a subset of providers
+            provider_to_doc = json.load(open(config.provider_docs, 'r'))
+            provider_to_doc = provider_to_doc["client_" + self.client_id]
+            providers = random.sample(list(provider_to_doc.keys()), k=config.dp_params.providers_per_fl_round)  # 50
+            train_datasets = [build_provider_dataset(config, 'train', provider_to_doc, provider, self.client_id) for provider in tqdm(providers, desc="Preparing Train Data Loader: ")]
+            
+        else:
+            train_datasets = [build_dataset(config, 'train', client_id=self.client_id)]
+
+        train_data_loaders = [DataLoader(train_dataset, batch_size=config.batch_size, shuffle=False, collate_fn=collate_fn) for train_dataset in train_datasets]
+
+
+        
+        #self.set_parameters(self.model, parameters, config)
+        # Prepare multiprocess
+        
+        mp.set_start_method('spawn', force=True)
+        manager = mp.Manager()
+    
+        # We receive the results through a shared dictionary
+        return_dict = manager.dict()
+        # Create the process 
+        p = mp.Process(target=fl_train, args=( train_data_loaders, parameters,self.logger,self.evaluator, self.client_id, config, return_dict))#self.trainloader, self.model, self.optimizer, self.evaluator, self.logger,
+       
+        # Start the process
+        
+        p.start()
+        # Wait for it to end
+        p.join()
+        # Close it
+        try:
+            p.close()
+        except ValueError as e:
+            print(f"Coudln't close the training process: {e}")
+        # Get the return values
+
+        new_parameters = return_dict["parameters"]
+
+        log_communication(federated_round=config.current_round, sender=self.client_id, receiver=-1, data=new_parameters, log_location=self.logger.comms_log_file)
+
+        #data_size = return_dict["data_size"]
+        # Del everything related to multiprocessing
+        del (manager, return_dict, p)
+        return new_parameters, 1, {}
+    
+        # self.set_parameters(self.model, parameters, config)
+        # # updated_weigths = fl_train(self.trainloader, self.model, self.optimizer, self.lr_scheduler, self.evaluator, self.logger, self.client_id, config)
+        # updated_weigths = fl_train(self.trainloader, self.model, self.optimizer, self.evaluator, self.logger, self.client_id, config)
+        #return updated_weigths, 1, {}  # TODO 1 ==> Number of selected clients.
 
     def set_parameters(self, model, parameters, config):
-        set_parameters_model(model, parameters)  # Use standard set_parameters model function.
+        set_lora_parameters(model, parameters)  # Use standard set_parameters model function.
         # params_dict = zip(model.model.state_dict().keys(), parameters)
         # state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
         log_communication(federated_round=config.current_round, sender=-1, receiver=self.client_id, data=parameters, log_location=self.logger.comms_log_file)
@@ -179,43 +109,71 @@ class FlowerClient(fl.client.NumPyClient):
 
     # The `evaluate` function will be called by Flower after every round
     def evaluate(self, parameters, config):
-        set_parameters_model(self.model, parameters)
-        accuracy, anls, _, _ = evaluate(self.valloader, self.model, self.evaluator, config)  # data_loader, model, evaluator, **kwargs
-        is_updated = self.evaluator.update_global_metrics(accuracy, anls, 0)
-        self.logger.log_val_metrics(accuracy, anls, update_best=is_updated)
-        save_model(model, config.current_round, update_best=is_updated, kwargs=config)
 
-        return float(0), len(self.valloader), {"accuracy": float(accuracy), "anls": anls}
+        # Create validation data loader
+        val_dataset = build_dataset(config, 'val')
+        val_dataset,_= random_split(val_dataset, [0.10, 0.9])
+        val_data_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn)
+
+        #logger = Logger(config=config)
+        # Prepare multiprocess
+
+        manager = mp.Manager()
+        # We receive the results through a shared dictionary
+        return_dict = manager.dict()
+        # Create the process 
+        p = mp.Process(target=evaluate, args=(val_data_loader,parameters, self.evaluator, config, return_dict))#self.trainloader, self.model, self.optimizer, self.evaluator, self.logger,
+        # Start the process
+        p.start()
+        # Wait for it to end
+        p.join()
+        # Close it
+        try:
+            p.close()
+        except ValueError as e:
+            print(f"Coudln't close the training process: {e}")
+
+        # set_parameters_model(self.model, parameters)
+        # accuracy, anls, _, _ = evaluate(self.valloader, parameters, self.evaluator, config)  # data_loader, model, evaluator, **kwargs
+        is_updated = self.evaluator.update_global_metrics(return_dict['accuracy'], return_dict['total_anls'], 0)
+        self.logger.log_val_metrics(return_dict['accuracy'], return_dict['total_anls'], update_best=is_updated)
+        #save_model(model, config.current_round, update_best=is_updated, kwargs=config)
+
+        #logger.logger.finish()
+
+        return float(0), len(val_data_loader), {"accuracy": float(return_dict['accuracy']), "anls": return_dict['total_anls']}
 
 
 def client_fn(client_id):
     """Create a Flower client representing a single organization."""
     # Create a list of train data loaders with one dataloader per provider
 
-    if config.use_dp:
-        # Pick a subset of providers
-        provider_to_doc = json.load(open(config.provider_docs, 'r'))
-        provider_to_doc = provider_to_doc["client_" + client_id]
-        providers = random.sample(list(provider_to_doc.keys()), k=config.dp_params.providers_per_fl_round)  # 50
-        train_datasets = [build_provider_dataset(config, 'train', provider_to_doc, provider, client_id) for provider in providers]
+    # if config.use_dp:
+    #     # Pick a subset of providers
         
-    else:
-        train_datasets = [build_dataset(config, 'train', client_id=client_id)]
+    #     provider_to_doc = json.load(open(config.provider_docs, 'r'))
+    #     provider_to_doc = provider_to_doc["client_" + client_id]
+    #     providers = random.sample(list(provider_to_doc.keys()), k=config.dp_params.providers_per_fl_round)  # 50
+    #     train_datasets = [build_provider_dataset(config, 'train', provider_to_doc, provider, client_id) for provider in providers]
+        
+        
+    # else:
+    #     train_datasets = [build_dataset(config, 'train', client_id=client_id)]
 
-    train_data_loaders = [DataLoader(train_dataset, batch_size=config.batch_size, shuffle=False, collate_fn=collate_fn) for train_dataset in train_datasets]
-    total_training_steps = sum([len(data_loader) for data_loader in train_data_loaders])
+    # train_data_loaders = [DataLoader(train_dataset, batch_size=config.batch_size, shuffle=False, collate_fn=collate_fn) for train_dataset in train_datasets]
+    # total_training_steps = sum([len(data_loader) for data_loader in train_data_loaders])
 
-    # Create validation data loader
-    val_dataset = build_dataset(config, 'val')
-    val_data_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, collate_fn=collate_fn)
+    # # Create validation data loader
+    # val_dataset = build_dataset(config, 'val')
+    # val_data_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn)
 
-    # lr_scheduler disabled due to malfunction in FL setup.
-    # optimizer, lr_scheduler = build_optimizer(model, length_train_loader=total_training_steps, config=config)
-    optimizer = build_optimizer(model, config=config)
+    # # lr_scheduler disabled due to malfunction in FL setup.
+    # # optimizer, lr_scheduler = build_optimizer(model, length_train_loader=total_training_steps, config=config)
+    # optimizer = build_optimizer(model, config=config)
+    #evaluator = Evaluator(case_sensitive=False)
+    #logger = Logger(config=config)
 
-    evaluator = Evaluator(case_sensitive=False)
-    logger = Logger(config=config)
-    return FlowerClient(model, train_data_loaders, val_data_loader, optimizer, evaluator, logger, config, client_id)
+    return FlowerClient( config, client_id )#train_data_loaders, val_data_loader,   logger, optimizer, evaluator,
 
 
 def get_config_fn():
@@ -230,16 +188,26 @@ def get_config_fn():
 
 
 if __name__ == '__main__':
+    #wandb.require("service")
+
     args = parse_args()
     config = load_config(args)
     seed_everything(config.seed)
-
+    print(config)
+    time.sleep(15)
     # Set `MASTER_ADDR` and `MASTER_PORT` environment variables
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '9957'
 
-    model = build_model(config)
-    params = get_parameters_from_model(model)
+    model = build_lora_model(config)
+    params = get_lora_parameters(model)
+    del model
+    logger=None#Logger(config)
+    
+    #model.share_memory_()
+    #params.share_memory()
+
+    
 
     # Create FedAvg strategy
     strategy = fl.server.strategy.FedAvg(
@@ -255,7 +223,7 @@ if __name__ == '__main__':
         evaluate_metrics_aggregation_fn=weighted_average,  # <-- pass the metric aggregation function
         initial_parameters=fl.common.ndarrays_to_parameters(params),
         on_fit_config_fn=get_config_fn(),  # Log path hardcoded according to /save dir
-        # evaluate_fn=fl_centralized_evaluation,  # Pass the centralized evaluation function
+        #evaluate_fn=fl_centralized_evaluation,  # Pass the centralized evaluation function
         on_evaluate_config_fn=get_config_fn(),
     )
 

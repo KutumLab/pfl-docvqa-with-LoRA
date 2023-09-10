@@ -8,8 +8,8 @@ from utils import Singleton
 
 class Logger(metaclass=Singleton):
 
-    def __init__(self, config):
-
+    def __init__(self, config, client_id):
+        self.client_id=client_id
         self.log_folder = config.save_dir
         self.experiment_name = config.experiment_name
         self.comms_log_file = os.path.join(self.log_folder, "communication_logs", "{:}.csv".format(self.experiment_name))
@@ -49,12 +49,12 @@ class Logger(metaclass=Singleton):
                 'Providers per FL Round': config.dp_params.providers_per_fl_round
             })
 
-        self.logger = wb.init(project="PFL-DocVQA-Competition", name=self.experiment_name, dir=self.log_folder, tags=tags, config=log_config)
+        self.logger = wb.init(project="PFL-DocVQA-Competition",group=self.experiment_name, name=self.experiment_name+str(config.current_round)+str(self.client_id), dir=self.log_folder, tags=tags, config=log_config)
         self.logger.define_metric("Train/FL Round *", step_metric="fl_round")
         self.logger.define_metric("Val/FL Round *", step_metric="fl_round")
         self._print_config(log_config)
 
-        self.current_epoch = 0
+        self.current_epoch = config.current_round
         self.len_dataset = 0
 
     def _print_config(self, config):

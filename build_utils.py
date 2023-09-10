@@ -1,6 +1,7 @@
 
 import torch
 from transformers import get_scheduler
+from peft import LoraConfig, get_peft_model
 
 
 def build_optimizer(model, config):
@@ -27,6 +28,8 @@ def build_optimizer(model, length_train_loader, config):
     return optimizer, lr_scheduler
 """
 
+
+
 def build_model(config):
 
     available_models = ['t5', 'vt5']
@@ -41,6 +44,26 @@ def build_model(config):
     else:
         raise ValueError("Value '{:s}' for model selection not expected. Please choose one of {:}".format(config.model_name, ', '.join(available_models)))
 
+
+
+    #model.model.to(config.device)
+    return model
+
+def build_lora_model(config):
+    model=build_model(config)
+    
+    lora_config=LoraConfig(
+                    target_modules= r"language_backbone\.encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.(q|k|v|o)",   
+                    r=64,     
+                    # modules_to_save=[   
+                    #     "language_backbone.decoder.block.11.layer.2"
+                    #     "language_backbone.decoder.final_layer_norm",
+                    #     "language_backbone.lm_head"
+                    #     ]
+                )  
+    peft_model = get_peft_model(model.model, lora_config)
+    model.model=peft_model
+    model.model.share_memory()
     model.model.to(config.device)
     return model
 
