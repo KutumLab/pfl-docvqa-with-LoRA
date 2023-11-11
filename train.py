@@ -146,32 +146,7 @@ class FlowerClient(fl.client.NumPyClient):
 
 def client_fn(client_id):
     """Create a Flower client representing a single organization."""
-    # Create a list of train data loaders with one dataloader per provider
 
-    # if config.use_dp:
-    #     # Pick a subset of providers
-        
-    #     provider_to_doc = json.load(open(config.provider_docs, 'r'))
-    #     provider_to_doc = provider_to_doc["client_" + client_id]
-    #     providers = random.sample(list(provider_to_doc.keys()), k=config.dp_params.providers_per_fl_round)  # 50
-    #     train_datasets = [build_provider_dataset(config, 'train', provider_to_doc, provider, client_id) for provider in providers]
-        
-        
-    # else:
-    #     train_datasets = [build_dataset(config, 'train', client_id=client_id)]
-
-    # train_data_loaders = [DataLoader(train_dataset, batch_size=config.batch_size, shuffle=False, collate_fn=collate_fn) for train_dataset in train_datasets]
-    # total_training_steps = sum([len(data_loader) for data_loader in train_data_loaders])
-
-    # # Create validation data loader
-    # val_dataset = build_dataset(config, 'val')
-    # val_data_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn)
-
-    # # lr_scheduler disabled due to malfunction in FL setup.
-    # # optimizer, lr_scheduler = build_optimizer(model, length_train_loader=total_training_steps, config=config)
-    # optimizer = build_optimizer(model, config=config)
-    #evaluator = Evaluator(case_sensitive=False)
-    #logger = Logger(config=config)
 
     return FlowerClient( config, client_id )#train_data_loaders, val_data_loader,   logger, optimizer, evaluator,
 
@@ -182,10 +157,16 @@ def get_config_fn():
     def custom_config(server_round: int):
         """Return evaluate configuration dict for each round."""
         config.current_round = server_round
+        print("congig.current_round: ",config.current_round)
         return config
 
     return custom_config
 
+def simple_stepwise_lr(server_round):
+    if server_round<=15:
+        return 1e-2
+    else:
+        return 1e-3
 
 if __name__ == '__main__':
     #wandb.require("service")
@@ -207,10 +188,9 @@ if __name__ == '__main__':
     #model.share_memory_()
     #params.share_memory()
 
-    
 
-    # Create FedAvg strategy
-    strategy = fl.server.strategy.FedAvg(
+
+    strategy_adam = fl.server.strategy.FedAdam(
         # fraction_fit=config.dp_params.client_sampling_probability,  # Sample 100% of available clients for training
         fraction_fit=config.fl_params.sample_clients/config.fl_params.total_clients,
         # fraction_evaluate=config.fl_params.sample_clients/config.fl_params.total_clients,  # Sample N of available clients for evaluation
@@ -225,6 +205,10 @@ if __name__ == '__main__':
         on_fit_config_fn=get_config_fn(),  # Log path hardcoded according to /save dir
         #evaluate_fn=fl_centralized_evaluation,  # Pass the centralized evaluation function
         on_evaluate_config_fn=get_config_fn(),
+        eta=1e-2,
+        eta_l=2e-4,
+        beta_1=0.9,
+        beta_2=0.99
     )
 
     # Specify client resources if you need GPU (defaults to 1 CPU and 0 GPU)
@@ -237,7 +221,7 @@ if __name__ == '__main__':
         client_fn=client_fn,
         num_clients=config.fl_params.total_clients,
         config=fl.server.ServerConfig(num_rounds=config.fl_params.num_rounds),
-        strategy=strategy,
+        strategy=strategy_adam,
         client_resources=client_resources,
         # ray_init_args={"local_mode": True}  # run in one process to avoid zombie ray processes
     )

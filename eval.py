@@ -25,17 +25,7 @@ def fl_train(data_loaders, parameters, logger,evaluator, client_id, fl_config,re
     Trains and returns the updated weights.
     """
     config=fl_config
-    # if config.use_dp:
-    #         # Pick a subset of providers
-    #         provider_to_doc = json.load(open(config.provider_docs, 'r'))
-    #         provider_to_doc = provider_to_doc["client_" + client_id]
-    #         providers = random.sample(list(provider_to_doc.keys()), k=config.dp_params.providers_per_fl_round)  # 50
-    #         train_datasets = [build_provider_dataset(config, 'train', provider_to_doc, provider, client_id) for provider in providers]
-            
-    # else:
-    #     train_datasets = [build_dataset(config, 'train', client_id=client_id)]
-
-    # data_loaders = [DataLoader(train_dataset, batch_size=config.batch_size, shuffle=False, collate_fn=collate_fn) for train_dataset in train_datasets]
+   
     
     model=build_lora_model(config)
     set_lora_parameters(model, parameters)
@@ -193,13 +183,13 @@ def evaluate(data_loader, parameters, evaluator, config, return_dict):
     for batch_idx, batch in enumerate(tqdm(data_loader)):
         bs = len(batch['question_id'])
         skipped=0
-        try:
-            with torch.no_grad():
-                outputs, pred_answers, answer_conf = model.forward(batch, return_pred_answer=True)
-        except:
-            print("skipped one batch because of some error")
-            skipped+=1
-            continue
+        # try:
+        with torch.no_grad():
+            outputs, pred_answers, answer_conf = model.forward(batch, return_pred_answer=True)
+        # except:
+        #     print("skipped one batch because of some error")
+        #     skipped+=1
+        #     continue
 
         metric = evaluator.get_metrics(batch['answers'], pred_answers, batch.get('answer_type', None))
 

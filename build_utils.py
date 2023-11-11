@@ -53,13 +53,8 @@ def build_lora_model(config):
     model=build_model(config)
     
     lora_config=LoraConfig(
-                    target_modules= r"language_backbone\.encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.(q|k|v|o)",   
-                    r=64,     
-                    # modules_to_save=[   
-                    #     "language_backbone.decoder.block.11.layer.2"
-                    #     "language_backbone.decoder.final_layer_norm",
-                    #     "language_backbone.lm_head"
-                    #     ]
+                    target_modules= r"language_backbone\.encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.(q|k)",   
+                    r=16,     
                 )  
     peft_model = get_peft_model(model.model, lora_config)
     model.model=peft_model
