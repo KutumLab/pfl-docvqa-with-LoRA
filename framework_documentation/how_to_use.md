@@ -102,6 +102,8 @@ Below, we show a descriptive list of the possible input arguments that can be us
 
 - Most of these parameters are specified in the configuration files. However, you can overwrite those parameters through the input arguments.
 
+- LoRA parameters have to be edited in the VT5 config file. 
+
 ### Datasets configuration files
 
 | Parameter      | Description                               | Values     |

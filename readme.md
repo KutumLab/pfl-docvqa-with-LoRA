@@ -1,7 +1,12 @@
-# PFL-DocVQA Competition
+# PFL-DocVQA with LoRA
 
-This repository is intended to provide a base framework and method for the [PFL-DocVQA Competition](http://158.109.8.94/?ch=2&com=introduction).
+This repositiory contains the code for our submission to  [PFL-DocVQA Competition (Track 2)](http://158.109.8.94/?ch=2&com=introduction). Our contribution is applying LoRA to train the given VT5 model. By reducing the total no. of trainable parameters, LoRA reduces the total communication cost and noise added to the model. 
 
+Related Papers:
+1. [Differentially Private Fine-tuning of Language Models](https://arxiv.org/abs/2110.06500)
+2. [SLoRA: Federated Parameter Efficient Fine-Tuning of Language Models](https://arxiv.org/pdf/2308.06522.pdf)
+
+## About the Competition: 
 <div style="text-align: justify;">
 The objective of the Privacy Preserving Federated Learning Document VQA (PFL-DocVQA) competition is to develop privacy-preserving solutions for fine-tuning multi-modal language models for document understanding on distributed data.
 We seek efficient federated learning solutions for finetuning a pre-trained generic Document Visual Question Answering (DocVQA) model on a new domain, that of invoice processing.

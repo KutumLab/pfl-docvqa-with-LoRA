@@ -8,21 +8,24 @@ seed: 42
 
 visual_module:
   model: dit
-  model_weights: /media/chs.hdsi/DATA/PFL-DocVQA/models/vt5_base.ckpt/vm_model
+  model_weights: /media/chs.gpu/19b31863-d2db-44c2-b407-9a4ffbebcbd1/DATA/PFL-DocVQA/models/vt5_base.ckpt/vm_model
   finetune: False
 
 training_parameters:
-  lr: 2e-4  # 2e-4
+  lr: 0.005  # 2e-4
   batch_size: 8
+  lora_rank: 16
   # warmup_iterations: 1000
 
 fl_parameters:
-  sample_clients: 1
+  sample_clients: 2
   total_clients: 10
-  num_rounds: 40
+  num_rounds: 30
   iterations_per_fl_round: 1
 
 dp_parameters:
-  providers_per_fl_round: 25
-  sensitivity: 1  # [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-  noise_multiplier: 0.572 # {1: 1.145, 4: 0.637, 8: 0.468}
+  providers_per_fl_round: 45
+  sensitivity: 0.5  # [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+  noise_multiplier: 1.21 # {1: 1.145, 4: 0.637, 8: 0.468}
+  target_epsilon: 1
+
