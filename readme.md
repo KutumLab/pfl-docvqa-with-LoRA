@@ -49,7 +49,7 @@ To make SGD differentially private, we introduce the Gaussian Mechanism to the g
 
 $$ \theta_{t+1} = \theta_t - \eta \left(\text{Clip}\left(\nabla f(\theta_t; D_t),S\right) + \mathcal{N}(0, \sigma I)\right) $$
 
-Here,  the $\text{Clip}(\cdot, S)$ operation ensures that gradients are scaled down if their magnitude exceeds a predefined sensitivity S, preventing overly large updates that could compromise privacy. And $ \sigma \propto \frac{S}{\epsilon}$, determines the scale of the added noise.
+Here,  the $\text{Clip}(\cdot, S)$ operation ensures that gradients are scaled down if their magnitude exceeds a predefined sensitivity S, preventing overly large updates that could compromise privacy. And $\sigma \propto \frac{S}{\epsilon}$, determines the scale of the added noise.
 
 ## Federated Learning with Local Diffrential Privacy: 
 
