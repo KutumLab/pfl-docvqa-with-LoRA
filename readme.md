@@ -28,7 +28,7 @@ Mathematically, for a function f with sensitivity Δf, the Gaussian Mechanism pe
 
 $$ f(D) + \text{Noise} \sim \mathcal{N}(0, \sigma^2) $$
 
-where $\sigma \propto \frac{\Delta f}{\epsilon} $ determines the scale of the added noise. 
+where $\sigma \propto \frac{\Delta f}{\epsilon}$ determines the scale of the added noise. 
 
 </div>
 
