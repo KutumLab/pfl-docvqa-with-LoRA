@@ -125,6 +125,17 @@ LoRA reduces the number of parameters involved in model updates, leading to a de
 ### Applying LoRA to Baseline:
 We applied LoRA reparameterization only to the Transformer attention weights $W_{q,v}$ and freeze all other weights. For rank r, we experimented with diffrent value and settled on r=16. This reduces model update size from 1.12GB to ~200MB. 
 
+After Applying LoRA, we used the following hyperparameters for training.
+
+|     |  $\epsilon =1$  | $\epsilon =4$   | $\epsilon =8$  
+| ------:| :-----: | :---: | :----:| 
+| Noise Multiplier |  1.21  | 0.695 | 0.553
+|  Sensitivity ($s$) |   0.5   | 0.5 | 0.5 
+|  Clients per round ($K$)   | 2 |   2 | 2
+|  Providers per client($M$)  | 45|  45 | 45
+|  Total Rounds($N$)   | 30|   30 | 30
+|  Delta($\delta$)   | $1 \times 10^{-5}$|   $1 \times 10^{-5}$ | $1 \times 10^{-5}$
+
 ### Results
 The application of LoRA yielded significant performance improvements across all three privacy budgets. The table below compares the accuracy achieved using LoRA against a baseline model:
 
