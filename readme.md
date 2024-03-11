@@ -2,11 +2,17 @@
 
 This repository contains the code for our [*winning entry*](https://benchmarks.elsa-ai.eu/?ch=2&com=evaluation&task=2) in PFL-DocVQA Competition 2023 ([Track 2](https://benchmarks.elsa-ai.eu/?ch=2&com=introduction)). Our contribution is very simple. We applied LoRA to the provided baseline. By reducing the no. of training parameters, our method significantly reduces both total communication costs and the overall noise added to the model during training. Below, we provide a simple and straightforward  explanation of our method. 
 
-**Authors**: Ragul N<sup>[1]</sup>, Sivasanjai GA<sup>[1]</sup>, Rintu Kutum<sup>[1][2]</sup>
+**Authors**: Ragul N<sup>[1]#</sup>, Sivasanjai GA<sup>[1]</sup>, Rintu Kutum<sup>[1][2]*</sup>
 
-**Affiliations**: 
-[1] Department of Computer Science, Ashoka University
-[2] Trivedi School of Biosciences, Ashoka University
+**Affiliations**:
+
+<sup>[1]</sup>Department of Computer Science, Ashoka University
+
+<sup>[2]</sup>Trivedi School of Biosciences, Ashoka University
+
+<sup>\#</sup> First author
+
+<sup>\*</sup> Corresponding author. rintu.kutum@ashoka.edu.in
 
 ## Priavte Machine Learning with Diffrential Privacy:
 ### Differential Privacy: Intuition and Formula
