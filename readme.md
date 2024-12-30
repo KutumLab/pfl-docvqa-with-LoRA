@@ -14,6 +14,9 @@ This repository contains the code for our [*winning entry*](https://benchmarks.e
 
 <sup>\*</sup> Corresponding author. rintu.kutum@ashoka.edu.in
 
+## Preprint
+[NeurIPS 2023 Competition: Privacy Preserving Federated Learning Document VQA](https://arxiv.org/abs/2411.03730)
+
 ## Priavte Machine Learning with Diffrential Privacy:
 ### Differential Privacy: Intuition and Formula
 <div style="text-align: justify;">
