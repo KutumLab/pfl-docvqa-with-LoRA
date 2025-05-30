@@ -2,15 +2,14 @@
 
 This repository contains the code for our [*winning entry*](https://benchmarks.elsa-ai.eu/?ch=2&com=evaluation&task=2) in PFL-DocVQA Competition 2023 ([Track 2](https://benchmarks.elsa-ai.eu/?ch=2&com=introduction)). Our contribution is very simple. We applied LoRA to the provided baseline. By reducing the no. of training parameters, our method significantly reduces both total communication costs and the overall noise added to the model during training. Below, we provide a simple and straightforward  explanation of our method. 
 
-**Authors**: Ragul N<sup>[1]#</sup>, Sivasanjai G A<sup>[1]</sup>, Rintu Kutum<sup>[1][2]*</sup>
+**Authors**: Ragul N<sup>[1][2]</sup>, Rintu Kutum<sup>[1][2][3][4]*</sup>
 
 **Affiliations**:
 
 <sup>[1]</sup>Department of Computer Science, Ashoka University
-
-<sup>[2]</sup>Trivedi School of Biosciences, Ashoka University
-
-<sup>\#</sup> First author
+<sup>[2]</sup>Mphasis AI & Tech Lab at Ashoka, Ashoka University
+<sup>[3]</sup>Koita Centre for Digital Health - Ashoka (KCDH-A), Ashoka University
+<sup>[4]</sup>Trivedi School of Biosciences, Ashoka University
 
 <sup>\*</sup> Corresponding author. rintu.kutum@ashoka.edu.in
 
@@ -159,6 +158,7 @@ The application of LoRA yielded significant performance improvements across all 
 |  $\epsilon =4$  |   59.75%   | 48.3%
 |  $\epsilon =8$     | 60.4% |   50.3%
 
-
+### Acknowlegdement
+RN thanks Siva Sanjai for the discussions and suggestions, and Mphasis AI & Tech Lab for research internship support. RK thanks Mpahsis F1 Foundation for the financial support, TSB and KCDH-A for the computing infrastructure. 
 </div>
 
